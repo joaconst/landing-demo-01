@@ -1,0 +1,22 @@
+# Dependencias
+node_modules/
+
+# Build e internos de Astro
+dist/
+.astro/
+
+# Capturas de control de calidad (no forman parte del sitio)
+revision-landing/
+revision-muestra/
+tall
+
+# Entorno
+.env
+.env.*
+
+# Sistema y editores
+.DS_Store
+Thumbs.db
+desktop.ini
+.vscode/
+.idea/

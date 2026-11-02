@@ -1,0 +1,2344 @@
+---
+import Base from '../layouts/Base.astro';
+import Spark from '../components/Spark.astro';
+import Wordmark from '../components/Wordmark.astro';
+
+/* --- Modelo de la calculadora (una sola fuente de verdad) --------------- */
+const GEN = 1400; // kWh por kWp al año, promedio del país
+const PERD = 0.12; // pérdidas de conversión y cableado
+const AUTO: Record<string, number> = { casa: 0.7, comercio: 0.78, industria: 0.85 };
+
+const inicial = { tipo: 'casa', factura: 48000, consumo: 460 };
+
+const calcular = (factura: number, consumo: number, tipo: string) => {
+  const auto = AUTO[tipo] ?? AUTO.casa;
+  const anual = consumo * 12;
+  const kwp = anual / (GEN * (1 - PERD) * auto);
+  return {
+    kwp: Math.round(kwp * 10) / 10,
+    generacion: Math.round(kwp * GEN * (1 - PERD)),
+    ahorro: Math.round(factura * auto * (1 - PERD)),
+    pct: Math.round(auto * (1 - PERD) * 100),
+  };
+};
+
+const fmt = (n: number, d = 0) =>
+  new Intl.NumberFormat('es-AR', { minimumFractionDigits: d, maximumFractionDigits: d }).format(n);
+
+/* Resalta los datos que faltan completar antes de publicar. */
+const marca = (s: string) => s.replace(/\[[^\]]+\]/g, (m) => `<span class="marcador">${m}</span>`);
+
+const d = calcular(inicial.factura, inicial.consumo, inicial.tipo);
+
+/* --- Plano del techo ---------------------------------------------------- */
+const celdas: { x: number; y: number; marca: boolean }[] = [];
+for (let c = 0; c < 5; c++) {
+  for (let r = 2; r >= 0; r--) {
+    celdas.push({ x: 14 + c * 60, y: 38 + r * 48, marca: c === 3 && r === 1 });
+  }
+}
+
+const soluciones = [
+  {
+    id: 'casa',
+    tab: 'Casa',
+    titulo: 'Para bajar la factura sin cambiar tus horarios.',
+    texto:
+      'Un sistema dimensionado sobre tu consumo anual, no sobre un promedio. Se instala en el techo, se conecta a tu tablero y empieza a generar el mismo día.',
+    datos: ['3 a 10 kWp', 'Trámite de usuario-generador', 'Monitoreo desde el celular'],
+    nota: 'El excedente que no consumís se inyecta a la red y se compensa según el criterio de tu distribuidora.',
+  },
+  {
+    id: 'comercio',
+    tab: 'Comercio',
+    titulo: 'Para el gasto que más pesa: el horario pico.',
+    texto:
+      'Diseñamos sobre tu curva de carga, no sobre la potencia del tablero. El objetivo es que la generación caiga justo en las horas en que la tarifa más duele.',
+    datos: ['10 a 100 kWp', 'Informe técnico para contabilidad', 'Habilitación con la distribuidora'],
+    nota: 'El dimensionado incluye análisis de demanda, factor de potencia y espacio real de cubierta.',
+  },
+  {
+    id: 'campo',
+    tab: 'Campo',
+    titulo: 'Para donde la red no llega o no alcanza.',
+    texto:
+      'Bombeo, electrificación rural y sistemas aislados con baterías. Equipos pensados para polvo, calor y años de uso continuo.',
+    datos: ['Bombeo solar', 'Sistemas aislados', 'Mantenimiento por contrato'],
+    nota: 'Cada equipo se monitorea en remoto: si la generación cae, lo vemos antes de que se note en el campo.',
+  },
+];
+
+const pasos = [
+  { n: '01', t: 'Diagnóstico', d: 'Miramos factura, consumo y techo. Si el techo no sirve, lo decimos.' },
+  { n: '02', t: 'Diseño y trámite', d: 'Memoria, planos y presentación ante la distribuidora. Vos firmás, nosotros corremos.' },
+  { n: '03', t: 'Instalación', d: 'Equipo certificado, puesta en marcha y prueba de generación el mismo día.' },
+  { n: '04', t: 'Monitoreo', d: 'Lecturas, alertas y mantenimiento. Si algo baja, lo vemos antes que vos.' },
+];
+
+const diferenciales = [
+  {
+    t: 'Dimensionado con datos',
+    d: 'Usamos tu consumo de doce meses. Sin sobredimensionar para vender más paneles.',
+  },
+  {
+    t: 'Un solo responsable',
+    d: 'Diseño, trámite, instalación y monitoreo con el mismo equipo. Sin terceros en el medio.',
+  },
+  {
+    t: 'Trámite incluido',
+    d: 'Presentación, seguimiento y habilitación como usuario-generador bajo Ley 27.424.',
+  },
+  {
+    t: 'Garantía por escrito',
+    d: 'Plazos y cobertura en el contrato, no en un folleto. Condiciones: [GARANTÍA].',
+  },
+];
+
+const preguntas: { id?: string; q: string; a: string }[] = [
+  {
+    q: '¿Cuánto tarda una instalación?',
+    a: 'La obra en sí lleva [DÍAS DE OBRA]. Lo que más varía es la aprobación de la distribuidora: [PLAZO]. Te damos un cronograma por escrito antes de empezar.',
+  },
+  {
+    q: '¿Qué pasa si la distribuidora no aprueba la conexión?',
+    a: 'Revisamos la factibilidad antes de cobrar la instalación. Si el punto no es apto, no avanzamos y te explicamos por qué.',
+  },
+  {
+    q: '¿Sirve mi techo?',
+    a: 'Necesita orientación norte, sombra limitada y una estructura en condiciones. Lo verificamos en la visita técnica, con medidas y fotos.',
+  },
+  {
+    q: '¿Qué mantenimiento necesita?',
+    a: 'Limpieza y revisión una o dos veces al año. El monitoreo avisa si la generación cae, así no dependés de mirar la app todos los días.',
+  },
+  {
+    id: 'ley-27424',
+    q: '¿Cómo se compensa la energía que entrego a la red?',
+    a: 'Bajo Ley 27.424, la distribuidora la reconoce como crédito en tu factura. El criterio y la tarifa de inyección los fija cada jurisdicción.',
+  },
+  {
+    q: '¿Qué pasa si me mudo?',
+    a: 'El sistema queda con el inmueble y el usuario-generador se puede transferir. El trámite de cambio de titular lo hacemos nosotros.',
+  },
+];
+---
+
+<Base
+  title="PHENIX · Energía solar llave en mano"
+  description="Diseño, instalación y trámite de sistemas solares en Argentina. Calculá el tamaño de tu sistema y el ahorro estimado en dos datos."
+>
+  <Fragment slot="head">
+    <meta property="og:title" content="PHENIX · Energía solar llave en mano" />
+    <meta
+      property="og:description"
+      content="Diseño, instalación y trámite de sistemas solares en Argentina. Calculá tu sistema en dos datos."
+    />
+    <meta property="og:type" content="website" />
+  </Fragment>
+
+  <!-- ================= NAVEGACIÓN ================= -->
+  <header class="nav">
+    <div class="wrap nav__inner">
+      <a class="nav__logo" href="#portada" aria-label="PHENIX, volver arriba">
+        <Wordmark conSimbolo gradId="nav" class="marca--nav" />
+      </a>
+
+      <nav class="nav__links" aria-label="Secciones">
+        <a href="#ahora">Por qué ahora</a>
+        <a href="#soluciones">Soluciones</a>
+        <a href="#proceso">Proceso</a>
+        <a href="#proyectos">Proyectos</a>
+        <a href="#preguntas">Preguntas</a>
+      </nav>
+
+      <a class="btn btn--sm nav__cta" href="#calculadora">
+        Calculá mi ahorro
+        <svg class="btn__flecha" viewBox="0 0 16 16" aria-hidden="true" fill="none">
+          <path d="M2 8h11M9 3.5 13.5 8 9 12.5" stroke="currentColor" stroke-width="1.6"></path>
+        </svg>
+      </a>
+    </div>
+  </header>
+
+  <main>
+    <!-- ================= PORTADA ================= -->
+    <section class="hero" id="portada" data-portada>
+      <div class="hero__brillo" aria-hidden="true"></div>
+      <div class="hero__reticula" aria-hidden="true"></div>
+
+      <div class="wrap hero__contenido">
+        <div class="hero__firma">
+          <Spark class="hero__chispa" style="width:44px;height:44px" grad id="hero" />
+          <p class="eyebrow eyebrow--plano">Ingeniería solar · Argentina</p>
+        </div>
+
+        <h1 class="hero__title">
+          <span class="hero__mask">
+            <span class="hero__in"
+              >Tu factura no baja.<br />Tu consumo <br class="br-movil" /><em>sí</em> puede.</span
+            >
+          </span>
+        </h1>
+
+        <div class="hero__pie">
+          <p class="hero__sub" data-hero-in>
+            Diseñamos, instalamos y tramitamos tu sistema solar llave en mano.
+            Alcance, plazos y garantía quedan por escrito.
+          </p>
+          <div class="hero__acciones" data-hero-in>
+            <a class="btn" href="#calculadora">
+              Calculá mi ahorro
+              <svg class="btn__flecha" viewBox="0 0 16 16" aria-hidden="true" fill="none">
+                <path d="M2 8h11M9 3.5 13.5 8 9 12.5" stroke="currentColor" stroke-width="1.6"></path>
+              </svg>
+              <span class="btn__spark" aria-hidden="true"></span>
+            </a>
+            <a class="btn btn--ghost" href="#proceso">Ver cómo trabajamos</a>
+          </div>
+        </div>
+
+        <p class="hero__trust" data-hero-in>
+          <span>Ley 27.424</span><span>Trámite incluido</span><span>Monitoreo incluido</span>
+        </p>
+
+        <figure class="medidor" data-hero-panel>
+          <div class="medidor__top">
+            <span class="mono">Ejemplo de cálculo</span>
+            <span class="tag">Casa</span>
+          </div>
+
+          <div class="medidor__cuerpo">
+            <div class="medidor__plano">
+              <svg
+                viewBox="0 0 320 200"
+                role="img"
+                aria-label="Plano de ejemplo de un techo con quince paneles solares; uno de ellos encendido"
+              >
+                <circle cx="296" cy="16" r="6" fill="none" stroke="#F2A33C" stroke-width="1.2"></circle>
+                <path
+                  d="M296 6v-3M296 29v-3M286 16h-3M309 16h-3"
+                  stroke="#F2A33C"
+                  stroke-width="1.2"
+                  stroke-linecap="round"></path>
+                <path d="M296 24v6" stroke="rgba(243,238,228,.25)" stroke-width="1" stroke-dasharray="2 3"></path>
+
+                <rect x="4" y="30" width="312" height="152" fill="none" stroke="rgba(243,238,228,.22)" stroke-width="1"
+                ></rect>
+
+                {
+                  celdas.map((c) => (
+                    <rect
+                      class:list={['celda', c.marca && 'celda--marca']}
+                      x={c.x}
+                      y={c.y}
+                      width="52"
+                      height="40"
+                      rx="1"
+                    />
+                  ))
+                }
+
+                <path d="M4 182h312" stroke="rgba(243,238,228,.12)" stroke-width="1"></path>
+                <text
+                  x="4"
+                  y="196"
+                  fill="#8C9992"
+                  font-family="IBM Plex Mono, monospace"
+                  font-size="8"
+                  letter-spacing="1.4">CUBIERTA / 15 PANELES</text
+                >
+                <text
+                  x="316"
+                  y="196"
+                  text-anchor="end"
+                  fill="#8C9992"
+                  font-family="IBM Plex Mono, monospace"
+                  font-size="8"
+                  letter-spacing="1.4">N ↑</text
+                >
+              </svg>
+            </div>
+
+            <div class="medidor__datos">
+              <div class="medidor__dato">
+                <span class="mono">Potencia</span>
+                <strong>6,4<small>kWp</small></strong>
+              </div>
+              <div class="medidor__dato">
+                <span class="mono">Paneles</span>
+                <strong>15</strong>
+              </div>
+              <div class="medidor__dato">
+                <span class="mono">Ahorro</span>
+                <strong>−62<small>%</small></strong>
+              </div>
+            </div>
+          </div>
+
+          <figcaption class="medidor__pie">
+            <span>Ejemplo ilustrativo, no una instalación real.</span>
+            <a href="#calculadora">Calculá tu caso</a>
+          </figcaption>
+        </figure>
+      </div>
+    </section>
+
+    <!-- ================= 01 CALCULADORA ================= -->
+    <section class="seccion seccion--linea" id="calculadora">
+      <div class="wrap">
+        <p class="eyebrow" data-reveal>01 / Calculadora</p>
+        <h2 class="h2 seccion__titulo" data-reveal>Cuánto necesitás, en dos datos.</h2>
+        <p class="lead seccion__bajada" data-reveal>
+          Poné lo que pagás y lo que consumís. Te devolvemos el tamaño del sistema
+          y el ahorro mensual estimado.
+        </p>
+
+        <div class="calc" data-calc>
+          <form class="calc__form" data-calc-form novalidate>
+            <fieldset class="calc__tipos">
+              <legend class="campo__label">Tipo de instalación</legend>
+              <label class="pill">
+                <input type="radio" name="tipo" value="casa" checked />
+                <span>Casa</span>
+              </label>
+              <label class="pill">
+                <input type="radio" name="tipo" value="comercio" />
+                <span>Comercio</span>
+              </label>
+              <label class="pill">
+                <input type="radio" name="tipo" value="industria" />
+                <span>Industria</span>
+              </label>
+            </fieldset>
+
+            <label class="campo">
+              <span class="campo__label">Factura mensual de luz</span>
+              <span class="campo__caja">
+                <span class="campo__prefijo">$</span>
+                <input
+                  type="text"
+                  inputmode="numeric"
+                  name="factura"
+                  value={fmt(inicial.factura)}
+                  autocomplete="off"
+                  aria-describedby="ayuda-factura"
+                />
+                <span class="campo__unidad">ARS</span>
+              </span>
+              <span class="campo__ayuda" id="ayuda-factura">El total del último mes, con impuestos.</span>
+            </label>
+
+            <label class="campo">
+              <span class="campo__label">Consumo mensual</span>
+              <span class="campo__caja">
+                <input
+                  type="text"
+                  inputmode="numeric"
+                  name="consumo"
+                  value={fmt(inicial.consumo)}
+                  autocomplete="off"
+                  aria-describedby="ayuda-consumo"
+                />
+                <span class="campo__unidad">kWh</span>
+              </span>
+              <span class="campo__ayuda" id="ayuda-consumo">Está en el detalle de tu factura.</span>
+            </label>
+
+            <p class="calc__error" data-calc-error hidden>Revisá los datos: la factura y el consumo no pueden ser cero.</p>
+          </form>
+
+          <div class="calc__resultado" data-calc-resultado aria-live="polite">
+            <div class="calc__resultado-top">
+              <span class="mono">Sistema recomendado</span>
+              <span class="tag tag--brasa">Estimación</span>
+            </div>
+
+            <p class="calc__kwp"><span data-out="kwp">{fmt(d.kwp, 1)}</span><small>kWp</small></p>
+
+            <dl class="calc__filas">
+              <div>
+                <dt>Generación anual</dt>
+                <dd><span data-out="generacion">{fmt(d.generacion)}</span> kWh</dd>
+              </div>
+              <div>
+                <dt>Ahorro mensual</dt>
+                <dd>$ <span data-out="ahorro">{fmt(d.ahorro)}</span></dd>
+              </div>
+              <div>
+                <dt>Sobre tu factura</dt>
+                <dd>−<span data-out="pct">{d.pct}</span>%</dd>
+              </div>
+            </dl>
+
+            <a class="btn" href="#contacto">
+              Pedir mi cotización
+              <svg class="btn__flecha" viewBox="0 0 16 16" aria-hidden="true" fill="none">
+                <path d="M2 8h11M9 3.5 13.5 8 9 12.5" stroke="currentColor" stroke-width="1.6"></path>
+              </svg>
+              <span class="btn__spark" aria-hidden="true"></span>
+            </a>
+
+            <p class="calc__nota">Es una estimación, no una cotización.</p>
+
+            <details class="supuestos">
+              <summary>Ver supuestos</summary>
+              <ul>
+                <li>Generación: 1.400 kWh por kWp al año, promedio del país. Varía por provincia y orientación.</li>
+                <li>Pérdidas de conversión y cableado: 12%.</li>
+                <li>Autoconsumo: 70% en casa, 78% en comercio, 85% en industria.</li>
+                <li>
+                  El retorno se calcula con el precio de tu cotización. La referencia de mercado 2026 es de 3 a 4 años
+                  (Energía Estratégica, 08/05/2026).
+                </li>
+              </ul>
+            </details>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ================= 02 POR QUÉ AHORA ================= -->
+    <section class="seccion seccion--linea" id="ahora">
+      <div class="wrap">
+        <p class="eyebrow" data-reveal>02 / Por qué ahora</p>
+        <h2 class="h2 seccion__titulo" data-reveal>La generación distribuida ya tiene números.</h2>
+        <p class="lead seccion__bajada" data-reveal>
+          La Ley 27.424 regula la generación distribuida desde 2015. En 2026 el crecimiento
+          se concentró en comercios e industrias, que consumen justo cuando hay sol.
+        </p>
+
+        <ul class="stats">
+          <li data-reveal>
+            <span class="stats__cifra"><span class="stats__num">223,7</span><span class="stats__unit">MW</span></span>
+            <p class="stats__label">Potencia instalada en el país</p>
+            <p class="stats__fecha">sep. 2026</p>
+          </li>
+          <li data-reveal>
+            <span class="stats__cifra"><span class="stats__num">5.246</span></span>
+            <p class="stats__label">Usuarios-generadores conectados</p>
+            <p class="stats__fecha">sep. 2026</p>
+          </li>
+          <li data-reveal>
+            <span class="stats__cifra"><span class="stats__num">+80,9</span><span class="stats__unit">%</span></span>
+            <p class="stats__label">Crecimiento anual de comercio e industria</p>
+            <p class="stats__fecha">144,25 MW instalados</p>
+          </li>
+          <li data-reveal>
+            <span class="stats__cifra"><span class="stats__num">1.356</span></span>
+            <p class="stats__label">Solicitudes de conexión en trámite</p>
+            <p class="stats__fecha">61,8 MW pendientes</p>
+          </li>
+        </ul>
+
+        <p class="fuente" data-reveal>
+          Fuente: Secretaría de Energía, informe de generación distribuida a septiembre de 2026,
+          citado por pv magazine Latam el 14/10/2026. Cifras del segmento comercio e industria.
+        </p>
+      </div>
+    </section>
+
+    <!-- ================= 03 SOLUCIONES ================= -->
+    <section class="seccion seccion--linea" id="soluciones">
+      <div class="wrap">
+        <p class="eyebrow" data-reveal>03 / Soluciones</p>
+        <h2 class="h2 seccion__titulo" data-reveal>Un sistema para cada techo.</h2>
+        <p class="lead seccion__bajada" data-reveal>
+          No hay un kit universal. Cambia el tamaño, la estructura y el trámite.
+          Elegí el que se parece a tu caso.
+        </p>
+
+        <div class="tabs" data-tabs>
+          <div class="tabs__lista" role="tablist" aria-label="Tipo de instalación">
+            {
+              soluciones.map((s, i) => (
+                <button
+                  type="button"
+                  class="tabs__tab"
+                  role="tab"
+                  id={`tab-${s.id}`}
+                  aria-controls={`panel-${s.id}`}
+                  aria-selected={i === 0 ? 'true' : 'false'}
+                  tabindex={i === 0 ? 0 : -1}
+                  data-tab={s.id}
+                >
+                  {s.tab}
+                </button>
+              ))
+            }
+          </div>
+
+          {
+            soluciones.map((s, i) => (
+              <div
+                class="tabs__panel"
+                role="tabpanel"
+                id={`panel-${s.id}`}
+                aria-labelledby={`tab-${s.id}`}
+                data-panel={s.id}
+              >
+                <div class="tabs__texto">
+                  <h3 class="tabs__titulo">{s.titulo}</h3>
+                  <p class="tabs__bajada">{s.texto}</p>
+                  <p class="tabs__nota">{s.nota}</p>
+                </div>
+
+                <ul class="tabs__datos">
+                  {s.datos.map((dato) => (
+                    <li>
+                      <span class="marca__punto" aria-hidden="true"></span>
+                      {dato}
+                    </li>
+                  ))}
+                </ul>
+
+                <a class="btn btn--ghost tabs__cta" href="#contacto">
+                  Pedir una visita técnica
+                </a>
+              </div>
+            ))
+          }
+        </div>
+      </div>
+    </section>
+
+    <!-- ================= 04 PROCESO ================= -->
+    <section class="seccion seccion--linea" id="proceso">
+      <div class="wrap">
+        <p class="eyebrow" data-reveal>04 / Proceso</p>
+        <h2 class="h2 seccion__titulo" data-reveal>De la factura a la primera lectura.</h2>
+        <p class="lead seccion__bajada" data-reveal>
+          Cuatro etapas y un solo responsable. Sabés en qué paso está tu obra
+          sin tener que preguntar.
+        </p>
+
+        <ol class="pasos">
+          {
+            pasos.map((p) => (
+              <li data-reveal>
+                <span class="pasos__n mono">{p.n}</span>
+                <div>
+                  <h3 class="pasos__t">{p.t}</h3>
+                  <p class="pasos__d">{p.d}</p>
+                </div>
+              </li>
+            ))
+          }
+        </ol>
+
+        <p class="nota" data-reveal set:html={marca('Plazo de instalación: [PLAZO] desde la aprobación del trámite.')} />
+      </div>
+    </section>
+
+    <!-- ================= 05 PROYECTOS ================= -->
+    <section class="seccion seccion--linea" id="proyectos">
+      <div class="wrap">
+        <p class="eyebrow" data-reveal>05 / Proyectos</p>
+        <h2 class="h2 seccion__titulo" data-reveal>Techos que ya están produciendo.</h2>
+        <p class="lead seccion__bajada" data-reveal>
+          Tres obras de referencia. Las fotos y los datos se reemplazan por los
+          proyectos reales antes de publicar.
+        </p>
+
+        <ul class="obras">
+          <li class="obra" data-reveal>
+            <div class="obra__foto">
+              <span class="marcador">[FOTO DEL PROYECTO 1]</span>
+              <span class="obra__n mono">01</span>
+            </div>
+            <div class="obra__pie">
+              <span class="tag">Casa</span>
+              <h3 class="obra__titulo">[CIUDAD]</h3>
+              <dl class="obra__datos">
+                <div><dt>Potencia</dt><dd>[POTENCIA]</dd></div>
+                <div><dt>Ahorro</dt><dd>[AHORRO REAL]</dd></div>
+                <div><dt>Año</dt><dd>[AÑO]</dd></div>
+              </dl>
+            </div>
+          </li>
+
+          <li class="obra" data-reveal>
+            <div class="obra__foto">
+              <span class="marcador">[FOTO DEL PROYECTO 2]</span>
+              <span class="obra__n mono">02</span>
+            </div>
+            <div class="obra__pie">
+              <span class="tag">Comercio</span>
+              <h3 class="obra__titulo">[CIUDAD]</h3>
+              <dl class="obra__datos">
+                <div><dt>Potencia</dt><dd>[POTENCIA]</dd></div>
+                <div><dt>Ahorro</dt><dd>[AHORRO REAL]</dd></div>
+                <div><dt>Año</dt><dd>[AÑO]</dd></div>
+              </dl>
+            </div>
+          </li>
+
+          <li class="obra" data-reveal>
+            <div class="obra__foto">
+              <span class="marcador">[FOTO DEL PROYECTO 3]</span>
+              <span class="obra__n mono">03</span>
+            </div>
+            <div class="obra__pie">
+              <span class="tag">Industria</span>
+              <h3 class="obra__titulo">[CIUDAD]</h3>
+              <dl class="obra__datos">
+                <div><dt>Potencia</dt><dd>[POTENCIA]</dd></div>
+                <div><dt>Ahorro</dt><dd>[AHORRO REAL]</dd></div>
+                <div><dt>Año</dt><dd>[AÑO]</dd></div>
+              </dl>
+            </div>
+          </li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- ================= 06 DIFERENCIALES ================= -->
+    <section class="seccion seccion--linea" id="diferenciales">
+      <div class="wrap">
+        <p class="eyebrow" data-reveal>06 / Por qué PHENIX</p>
+        <h2 class="h2 seccion__titulo" data-reveal>Lo técnico también se explica.</h2>
+        <p class="lead seccion__bajada" data-reveal>
+          La mayoría de las dudas no son sobre paneles: son sobre plazos, trámites
+          y qué pasa si algo falla. Esto es lo que cubrimos.
+        </p>
+
+        <ul class="difs">
+          {
+            diferenciales.map((x, i) => (
+              <li data-reveal>
+                <span class="difs__n mono">{String(i + 1).padStart(2, '0')}</span>
+                <h3 class="difs__t">{x.t}</h3>
+                <p class="difs__d" set:html={marca(x.d)} />
+              </li>
+            ))
+          }
+        </ul>
+      </div>
+    </section>
+
+    <!-- ================= 07 TESTIMONIOS ================= -->
+    <section class="seccion seccion--linea" id="voces">
+      <div class="wrap">
+        <p class="eyebrow" data-reveal>07 / Clientes</p>
+        <h2 class="h2 seccion__titulo" data-reveal>Lo que dicen después de la primera factura.</h2>
+        <p class="lead seccion__bajada" data-reveal>
+          Tres testimonios, en sus palabras. Se publican solo con autorización
+          y sin retocar el sentido.
+        </p>
+
+        <ul class="voces">
+          <li class="voz" data-reveal>
+            <p class="voz__texto marcador">[TESTIMONIO REAL DE CLIENTE]</p>
+            <p class="voz__autor" set:html={marca('[NOMBRE] · [CIUDAD]')} />
+            <p class="voz__tipo mono" set:html={marca('[TIPO DE SISTEMA]')} />
+          </li>
+          <li class="voz" data-reveal>
+            <p class="voz__texto marcador">[TESTIMONIO REAL DE CLIENTE]</p>
+            <p class="voz__autor" set:html={marca('[NOMBRE] · [CIUDAD]')} />
+            <p class="voz__tipo mono" set:html={marca('[TIPO DE SISTEMA]')} />
+          </li>
+          <li class="voz" data-reveal>
+            <p class="voz__texto marcador">[TESTIMONIO REAL DE CLIENTE]</p>
+            <p class="voz__autor" set:html={marca('[NOMBRE] · [CIUDAD]')} />
+            <p class="voz__tipo mono" set:html={marca('[TIPO DE SISTEMA]')} />
+          </li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- ================= 08 PREGUNTAS ================= -->
+    <section class="seccion seccion--linea" id="preguntas">
+      <div class="wrap">
+        <p class="eyebrow" data-reveal>08 / Preguntas</p>
+        <h2 class="h2 seccion__titulo" data-reveal>Lo que preguntan antes de decidir.</h2>
+
+        <div class="faq">
+          {
+            preguntas.map((p) => (
+              <details class="faq__item" data-reveal id={p.id}>
+                <summary>
+                  <span>{p.q}</span>
+                  <span class="faq__signo" aria-hidden="true"></span>
+                </summary>
+                <p set:html={marca(p.a)} />
+              </details>
+            ))
+          }
+        </div>
+      </div>
+    </section>
+
+    <!-- ================= 09 CONTACTO ================= -->
+    <section class="seccion seccion--linea contacto" id="contacto">
+      <div class="wrap contacto__grid">
+        <div class="contacto__texto">
+          <p class="eyebrow" data-reveal>09 / Contacto</p>
+          <h2 class="h2 seccion__titulo" data-reveal>Empezá por tu última factura.</h2>
+          <p class="lead contacto__bajada" data-reveal>
+            Contanos dónde estás y cuánto consumís. Te respondemos con un dimensionado
+            y los pasos del trámite. Sin compromiso.
+          </p>
+
+          <ul class="contacto__datos" data-reveal>
+            <li><span class="mono">WhatsApp</span> <span class="marcador">[WHATSAPP]</span></li>
+            <li><span class="mono">Correo</span> <span class="marcador">[CORREO]</span></li>
+            <li><span class="mono">Base</span> <span class="marcador">[CIUDAD]</span></li>
+            <li><span class="mono">Respuesta</span> <span class="marcador">[PLAZO DE RESPUESTA]</span></li>
+          </ul>
+        </div>
+
+        <form class="form card" data-form novalidate>
+          <div class="form__fila">
+            <label class="campo">
+              <span class="campo__label">Nombre <span class="form__req">*</span></span>
+              <span class="campo__caja">
+                <input type="text" name="nombre" autocomplete="name" required />
+              </span>
+            </label>
+
+            <label class="campo">
+              <span class="campo__label">Ciudad <span class="form__req">*</span></span>
+              <span class="campo__caja">
+                <input type="text" name="ciudad" autocomplete="address-level2" required />
+              </span>
+            </label>
+          </div>
+
+          <label class="campo">
+            <span class="campo__label">Tipo de instalación</span>
+            <span class="campo__caja campo__caja--select">
+              <select name="tipo">
+                <option value="Casa">Casa</option>
+                <option value="Comercio">Comercio</option>
+                <option value="Industria">Industria</option>
+                <option value="Campo">Campo o agro</option>
+              </select>
+            </span>
+          </label>
+
+          <div class="form__fila">
+            <label class="campo">
+              <span class="campo__label">Factura mensual</span>
+              <span class="campo__caja">
+                <span class="campo__prefijo">$</span>
+                <input type="text" inputmode="numeric" name="factura" autocomplete="off" />
+                <span class="campo__unidad">ARS</span>
+              </span>
+            </label>
+
+            <label class="campo">
+              <span class="campo__label">Consumo mensual</span>
+              <span class="campo__caja">
+                <input type="text" inputmode="numeric" name="consumo" autocomplete="off" />
+                <span class="campo__unidad">kWh</span>
+              </span>
+            </label>
+          </div>
+
+          <label class="campo">
+            <span class="campo__label">Algo más que debamos saber</span>
+            <span class="campo__caja campo__caja--area">
+              <textarea name="mensaje" rows="3"></textarea>
+            </span>
+          </label>
+
+          <p class="form__error" data-form-error hidden>
+            Escribí tu nombre y tu ciudad para continuar.
+          </p>
+
+          <noscript>
+            <p class="form__error">
+              Este formulario necesita JavaScript. Escribinos a
+              <span class="marcador">[WHATSAPP]</span> o a <span class="marcador">[CORREO]</span>.
+            </p>
+          </noscript>
+
+          <button class="btn form__enviar" type="submit">
+            Enviar por WhatsApp
+            <svg class="btn__flecha" viewBox="0 0 16 16" aria-hidden="true" fill="none">
+              <path d="M2 8h11M9 3.5 13.5 8 9 12.5" stroke="currentColor" stroke-width="1.6"></path>
+            </svg>
+            <span class="btn__spark" aria-hidden="true"></span>
+          </button>
+
+          <p class="form__nota">
+            Respondemos en <span class="marcador">[PLAZO DE RESPUESTA]</span>.
+          </p>
+          <a class="form__correo" href="#contacto" data-form-correo>Prefiero escribirlo por correo</a>
+
+          <div class="form__listo" data-form-listo hidden>
+            <p class="form__listo-titulo">Mensaje listo</p>
+            <pre class="form__mensaje" data-form-mensaje></pre>
+            <div class="form__listo-acciones">
+              <button class="btn btn--sm" type="button" data-form-copiar>Copiar mensaje</button>
+              <span class="form__copiado mono" data-form-copiado hidden>Copiado</span>
+            </div>
+            <p class="form__nota">
+              Demostración: al cargar el número del negocio, este botón abre WhatsApp
+              con el mensaje ya escrito.
+            </p>
+          </div>
+        </form>
+      </div>
+    </section>
+  </main>
+
+  <!-- ================= PIE ================= -->
+  <footer class="pie">
+    <div class="wrap">
+      <div class="pie__top">
+        <div class="pie__marca">
+          <Wordmark conSimbolo class="marca--pie" />
+          <p class="pie__frase">Energía que vuelve.</p>
+        </div>
+
+        <nav class="pie__col" aria-label="Secciones del sitio">
+          <p class="mono">Secciones</p>
+          <a href="#calculadora">Calculadora</a>
+          <a href="#ahora">Por qué ahora</a>
+          <a href="#soluciones">Soluciones</a>
+          <a href="#proceso">Proceso</a>
+          <a href="#proyectos">Proyectos</a>
+          <a href="#preguntas">Preguntas</a>
+        </nav>
+
+        <div class="pie__col">
+          <p class="mono">Contacto</p>
+          <p class="marcador">[WHATSAPP]</p>
+          <p class="marcador">[CORREO]</p>
+          <p class="marcador">[CIUDAD]</p>
+        </div>
+
+        <div class="pie__col">
+          <p class="mono">Legal</p>
+          <a href="#ley-27424">Ley 27.424</a>
+          <span class="marcador">[AVISO DE PRIVACIDAD]</span>
+        </div>
+      </div>
+
+      <div class="pie__bajo">
+        <p class="pie__demo">
+          Sitio de demostración. La marca, los textos y los datos de contacto son de ejemplo.
+        </p>
+        <p class="pie__meta mono">
+          <span>© 2026 PHENIX</span>
+          <a href="#portada">Volver arriba ↑</a>
+        </p>
+      </div>
+    </div>
+  </footer>
+
+  <!-- ================= BARRA FIJA (celular) ================= -->
+  <div class="barra" data-barra>
+    <a class="btn barra__cta" href="#calculadora">
+      Calculá mi ahorro
+      <span class="btn__spark" aria-hidden="true"></span>
+    </a>
+    <a class="barra__wa" href="#contacto">Escribinos</a>
+  </div>
+
+  <script>
+    import '../scripts/landing.ts';
+  </script>
+
+  <style>
+    [hidden] {
+      display: none !important;
+    }
+
+    /* ===== Marcador de dato faltante ===== */
+    .marcador {
+      display: inline-block;
+      padding: 0 0.35em;
+      background: var(--llama);
+      color: var(--obsidiana);
+      font-family: var(--mono);
+      font-size: 0.75em;
+      letter-spacing: 0.02em;
+      line-height: 1.6;
+      border-radius: 1px;
+    }
+
+    /* ===== Navegación ===== */
+    .nav {
+      position: sticky;
+      top: 0;
+      z-index: 50;
+      background: rgba(10, 15, 13, 0.88);
+      backdrop-filter: blur(10px);
+      border-bottom: 1px solid var(--linea);
+    }
+
+    .nav__inner {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1rem;
+      min-height: 64px;
+    }
+
+    .nav__logo {
+      display: inline-flex;
+      align-items: center;
+      flex: none;
+    }
+
+    .nav__links {
+      display: none;
+      gap: 1.5rem;
+      font-size: 0.8125rem;
+      color: var(--ceniza);
+    }
+
+    .nav__links a {
+      padding-block: 0.5rem;
+      transition: color var(--t-hover) var(--ease);
+    }
+
+    .nav__links a:hover {
+      color: var(--hueso);
+    }
+
+    .nav__cta {
+      flex: none;
+    }
+
+    @media (min-width: 980px) {
+      .nav__links {
+        display: flex;
+      }
+    }
+
+    @media (max-width: 479px) {
+      .nav__cta {
+        padding: 0 0.7rem;
+        font-size: 0.75rem;
+      }
+
+      .nav__cta .btn__flecha {
+        display: none;
+      }
+    }
+
+    /* ===== Portada ===== */
+    .hero {
+      position: relative;
+      isolation: isolate;
+      overflow: clip;
+      padding-block: clamp(1.75rem, 4vw, 3rem) clamp(2.5rem, 6vw, 5rem);
+    }
+
+    .hero__brillo {
+      position: absolute;
+      inset: 0;
+      z-index: -2;
+      background:
+        radial-gradient(120% 90% at 85% -10%, rgba(196, 85, 45, 0.3), transparent 55%),
+        radial-gradient(90% 70% at 0% 100%, rgba(18, 58, 46, 0.55), transparent 60%);
+    }
+
+    .hero__reticula {
+      position: absolute;
+      inset: 0;
+      z-index: -1;
+      background-image:
+        linear-gradient(rgba(243, 238, 228, 0.06) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(243, 238, 228, 0.06) 1px, transparent 1px);
+      background-size: 64px 64px;
+      mask-image: radial-gradient(80% 70% at 50% 15%, #000 0%, transparent 78%);
+    }
+
+    .hero__contenido {
+      position: relative;
+    }
+
+    .hero__firma {
+      display: flex;
+      align-items: center;
+      gap: 0.85rem;
+      margin-bottom: 1.5rem;
+    }
+
+    .hero__chispa {
+      flex: none;
+      color: var(--hueso);
+    }
+
+    .hero__title {
+      font-family: var(--display);
+      font-stretch: 112%;
+      font-weight: 800;
+      font-size: clamp(2.05rem, 7.2vw, 4.6rem);
+      line-height: 0.94;
+      letter-spacing: -0.028em;
+      text-wrap: balance;
+      max-width: 22ch;
+    }
+
+    .hero__title em {
+      font-style: normal;
+      color: var(--llama);
+    }
+
+    .br-movil {
+      display: none;
+    }
+
+    @media (max-width: 859px) {
+      .br-movil {
+        display: initial;
+      }
+    }
+
+    .hero__mask {
+      display: block;
+      overflow: hidden;
+      padding-bottom: 0.08em;
+    }
+
+    .hero__in {
+      display: block;
+    }
+
+    .js .hero__in {
+      transform: translateY(112%);
+      animation: lineaRescate 0s 12s forwards;
+    }
+
+    @keyframes lineaRescate {
+      to {
+        transform: none;
+      }
+    }
+
+    .hero__pie {
+      display: grid;
+      gap: 1.4rem;
+      margin-top: 1.5rem;
+    }
+
+    .hero__sub {
+      max-width: 46ch;
+      color: var(--ceniza);
+      font-size: clamp(1rem, 1.6vw, 1.125rem);
+      line-height: 1.55;
+      text-wrap: pretty;
+    }
+
+    .hero__acciones {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.6rem;
+    }
+
+    .hero__acciones .btn {
+      min-height: 50px;
+      padding: 0 1.05rem;
+      font-size: 0.9375rem;
+    }
+
+    .hero__trust {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.4rem 0.7rem;
+      margin-top: 1.5rem;
+      font-family: var(--mono);
+      font-size: 0.625rem;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--ceniza);
+    }
+
+    .hero__trust span + span::before {
+      content: '·';
+      margin-right: 0.7rem;
+      color: var(--brasa);
+    }
+
+    @media (max-width: 479px) {
+      .hero__trust {
+        font-size: 0.5625rem;
+        letter-spacing: 0.1em;
+        gap: 0.3rem 0.5rem;
+      }
+
+      .hero__trust span + span::before {
+        margin-right: 0.5rem;
+      }
+    }
+
+    @media (min-width: 860px) {
+      .hero__pie {
+        grid-template-columns: minmax(0, 1fr) auto;
+        align-items: end;
+        gap: 2.5rem;
+      }
+
+      .hero__acciones {
+        justify-content: flex-end;
+      }
+    }
+
+    /* ===== Medidor ===== */
+    .medidor {
+      margin: clamp(2rem, 5vw, 3.25rem) 0 0;
+      border: var(--borde);
+      border-radius: var(--radio);
+      background: linear-gradient(180deg, rgba(28, 37, 32, 0.92), rgba(21, 28, 24, 0.94));
+      overflow: hidden;
+      box-shadow: 0 30px 80px -50px rgba(0, 0, 0, 0.9);
+    }
+
+    .medidor__top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.75rem;
+      padding: 0.8rem 1rem;
+      border-bottom: var(--borde);
+    }
+
+    .medidor__top .mono {
+      font-size: 0.5625rem;
+      letter-spacing: 0.12em;
+    }
+
+    .medidor__pie {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.25rem 1rem;
+      padding: 0.2rem 1rem;
+      border-top: var(--borde);
+      font-family: var(--mono);
+      font-size: 0.5625rem;
+      letter-spacing: 0.04em;
+      line-height: 1.5;
+      color: var(--ceniza);
+    }
+
+    .medidor__pie a {
+      display: inline-flex;
+      align-items: center;
+      min-height: 44px;
+      font-size: 0.625rem;
+      letter-spacing: 0.06em;
+      color: var(--cielo);
+      text-decoration: underline;
+      text-underline-offset: 3px;
+      transition: color var(--t-hover) var(--ease);
+    }
+
+    .medidor__pie a:hover {
+      color: var(--hueso);
+    }
+
+    .medidor__plano {
+      padding: 0.9rem 0.9rem 0.4rem;
+      border-bottom: var(--borde);
+    }
+
+    .medidor__plano svg {
+      width: 100%;
+      height: auto;
+    }
+
+    .celda {
+      fill: rgba(243, 238, 228, 0.05);
+      stroke: rgba(243, 238, 228, 0.18);
+      stroke-width: 1;
+    }
+
+    .celda--marca {
+      fill: rgba(196, 85, 45, 0.55);
+      stroke: rgba(242, 163, 60, 0.8);
+    }
+
+    .medidor__datos {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+
+    .medidor__dato {
+      padding: 0.85rem 0.7rem;
+      border-right: var(--borde);
+    }
+
+    .medidor__dato:last-child {
+      border-right: 0;
+    }
+
+    .medidor__dato .mono {
+      display: block;
+      font-size: 0.5rem;
+      letter-spacing: 0.1em;
+      margin-bottom: 0.35rem;
+    }
+
+    .medidor__dato strong {
+      display: block;
+      font-family: var(--display);
+      font-stretch: 105%;
+      font-weight: 700;
+      font-size: clamp(1.2rem, 4.6vw, 1.7rem);
+      line-height: 1;
+      letter-spacing: -0.02em;
+      color: var(--hueso);
+      white-space: nowrap;
+    }
+
+    .medidor__dato small {
+      font-family: var(--mono);
+      font-size: 0.5rem;
+      letter-spacing: 0.06em;
+      color: var(--ceniza);
+      margin-left: 0.2em;
+    }
+
+    @media (min-width: 860px) {
+      .medidor__cuerpo {
+        display: grid;
+        grid-template-columns: 1.3fr 0.7fr;
+      }
+
+      .medidor__plano {
+        border-bottom: 0;
+        border-right: var(--borde);
+        padding: 1.1rem;
+      }
+
+      .medidor__datos {
+        grid-template-columns: 1fr;
+        align-content: center;
+      }
+
+      .medidor__dato {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 1rem;
+        padding: 0.95rem 1.1rem;
+        border-right: 0;
+        border-bottom: var(--borde);
+      }
+
+      .medidor__dato:last-child {
+        border-bottom: 0;
+      }
+
+      .medidor__dato .mono {
+        margin-bottom: 0;
+      }
+    }
+
+    /* ===== Secciones ===== */
+    .seccion__titulo {
+      margin-top: 1rem;
+      max-width: 24ch;
+    }
+
+    .seccion__bajada {
+      margin-top: 1rem;
+      max-width: 58ch;
+    }
+
+    .nota {
+      margin-top: 1.5rem;
+      font-family: var(--mono);
+      font-size: 0.6875rem;
+      line-height: 1.6;
+      letter-spacing: 0.04em;
+      color: var(--ceniza);
+      max-width: 62ch;
+    }
+
+    /* ===== Calculadora ===== */
+    .calc {
+      display: grid;
+      gap: 0.75rem;
+      margin-top: 2rem;
+    }
+
+    @media (min-width: 900px) {
+      .calc {
+        grid-template-columns: minmax(0, 1fr) minmax(0, 0.95fr);
+        align-items: start;
+        gap: 1rem;
+      }
+    }
+
+    .calc__form {
+      display: grid;
+      gap: 1.15rem;
+      padding: 1.25rem;
+      border: var(--borde);
+      border-radius: var(--radio);
+      background: var(--carbon);
+    }
+
+    .calc__tipos {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.4rem;
+      margin: 0;
+      padding: 0;
+      border: 0;
+    }
+
+    .calc__tipos legend {
+      width: 100%;
+      margin-bottom: 0.5rem;
+    }
+
+    .pill {
+      position: relative;
+      display: inline-flex;
+    }
+
+    .pill input {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    .pill span {
+      display: inline-flex;
+      align-items: center;
+      min-height: 40px;
+      padding: 0 0.85rem;
+      border: 1px solid var(--linea-fuerte);
+      border-radius: var(--radio);
+      font-size: 0.8125rem;
+      color: var(--ceniza);
+      cursor: pointer;
+      transition:
+        background var(--t-hover) var(--ease),
+        color var(--t-hover) var(--ease),
+        border-color var(--t-hover) var(--ease);
+    }
+
+    .pill input:checked + span {
+      background: var(--hueso);
+      border-color: var(--hueso);
+      color: var(--obsidiana);
+      font-weight: 600;
+    }
+
+    .pill input:focus-visible + span {
+      outline: 2px solid var(--llama);
+      outline-offset: 2px;
+    }
+
+    .campo {
+      display: flex;
+      flex-direction: column;
+      gap: 0.4rem;
+    }
+
+    .campo__label {
+      font-size: 0.8125rem;
+      color: var(--ceniza);
+    }
+
+    .campo__caja {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      min-height: 52px;
+      padding: 0 0.85rem;
+      border: 1px solid var(--linea-fuerte);
+      border-radius: var(--radio);
+      background: var(--obsidiana);
+      transition: border-color var(--t-hover) var(--ease);
+    }
+
+    .campo__caja:focus-within {
+      border-color: var(--llama);
+    }
+
+    .campo__prefijo {
+      font-family: var(--mono);
+      color: var(--ceniza);
+    }
+
+    .campo input,
+    .campo select,
+    .campo textarea {
+      flex: 1;
+      min-width: 0;
+      width: 100%;
+      border: 0;
+      background: none;
+      font-family: var(--mono);
+      font-size: 1rem;
+      color: var(--hueso);
+      outline: none;
+    }
+
+    .campo__caja--select {
+      padding-right: 0.6rem;
+    }
+
+    .campo select {
+      appearance: none;
+      padding-right: 1.5rem;
+      cursor: pointer;
+    }
+
+    .campo__caja--select {
+      position: relative;
+    }
+
+    .campo__caja--select::after {
+      content: '';
+      position: absolute;
+      right: 0.95rem;
+      width: 6px;
+      height: 6px;
+      border-right: 1px solid var(--ceniza);
+      border-bottom: 1px solid var(--ceniza);
+      transform: rotate(45deg) translateY(-2px);
+      pointer-events: none;
+    }
+
+    .campo select option {
+      background: var(--carbon);
+      color: var(--hueso);
+    }
+
+    .campo__caja--area {
+      padding: 0.7rem 0.85rem;
+      align-items: stretch;
+    }
+
+    .campo textarea {
+      font-family: var(--texto);
+      resize: vertical;
+      line-height: 1.5;
+    }
+
+    .campo__unidad {
+      font-family: var(--mono);
+      font-size: 0.625rem;
+      letter-spacing: 0.1em;
+      color: var(--ceniza);
+    }
+
+    .campo__ayuda {
+      font-size: 0.75rem;
+      line-height: 1.45;
+      color: var(--ceniza);
+    }
+
+    .calc__error {
+      font-size: 0.8125rem;
+      color: var(--llama);
+    }
+
+    .calc__resultado {
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+      padding: 1.25rem;
+      border: 1px solid rgba(242, 163, 60, 0.35);
+      border-radius: var(--radio);
+      background:
+        radial-gradient(120% 90% at 100% 0%, rgba(196, 85, 45, 0.16), transparent 60%),
+        var(--carbon-alto);
+    }
+
+    .calc__resultado-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.5rem;
+    }
+
+    .calc__kwp {
+      font-family: var(--display);
+      font-stretch: 110%;
+      font-weight: 800;
+      font-size: clamp(3rem, 12vw, 4.5rem);
+      line-height: 0.9;
+      letter-spacing: -0.035em;
+      color: var(--hueso);
+      font-variant-numeric: tabular-nums;
+    }
+
+    .calc__kwp small {
+      margin-left: 0.3rem;
+      font-family: var(--mono);
+      font-size: 0.8125rem;
+      letter-spacing: 0.1em;
+      color: var(--llama);
+    }
+
+    .calc__filas {
+      display: grid;
+      gap: 0;
+      margin: 0;
+      border-top: 1px solid var(--linea);
+    }
+
+    .calc__filas div {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 1rem;
+      padding: 0.55rem 0;
+      border-bottom: 1px solid var(--linea);
+    }
+
+    .calc__filas dt {
+      font-size: 0.8125rem;
+      color: var(--ceniza);
+    }
+
+    .calc__filas dd {
+      margin: 0;
+      font-family: var(--mono);
+      font-size: 0.875rem;
+      color: var(--hueso);
+      font-variant-numeric: tabular-nums;
+    }
+
+    .calc__resultado .btn {
+      width: 100%;
+    }
+
+    .calc__nota {
+      font-size: 0.75rem;
+      color: var(--ceniza);
+    }
+
+    .supuestos {
+      border-top: 1px solid var(--linea);
+      padding-top: 0.75rem;
+    }
+
+    .supuestos summary {
+      font-family: var(--mono);
+      font-size: 0.625rem;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--cielo);
+      cursor: pointer;
+    }
+
+    .supuestos ul {
+      display: grid;
+      gap: 0.5rem;
+      margin-top: 0.75rem;
+    }
+
+    .supuestos li {
+      font-size: 0.75rem;
+      line-height: 1.5;
+      color: var(--ceniza);
+      padding-left: 0.9rem;
+      position: relative;
+    }
+
+    .supuestos li::before {
+      content: '';
+      position: absolute;
+      left: 0;
+      top: 0.55em;
+      width: 5px;
+      height: 5px;
+      background: var(--brasa);
+      transform: rotate(45deg);
+    }
+
+    /* ===== Cifras del mercado ===== */
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 1px;
+      margin-top: 2rem;
+      border: var(--borde);
+      border-radius: var(--radio);
+      background: var(--linea);
+      overflow: hidden;
+    }
+
+    .stats li {
+      display: flex;
+      flex-direction: column;
+      gap: 0.2rem;
+      padding: 1.1rem 1rem 1.25rem;
+      background: var(--obsidiana);
+    }
+
+    .stats__cifra {
+      display: flex;
+      align-items: baseline;
+      gap: 0.2rem;
+      flex-wrap: nowrap;
+    }
+
+    .stats__num {
+      font-family: var(--display);
+      font-stretch: 108%;
+      font-weight: 800;
+      font-size: clamp(1.9rem, 7vw, 2.9rem);
+      line-height: 0.95;
+      letter-spacing: -0.03em;
+      color: var(--hueso);
+      font-variant-numeric: tabular-nums;
+    }
+
+    .stats__unit {
+      margin-left: 0;
+      font-family: var(--mono);
+      font-size: 0.6875rem;
+      letter-spacing: 0.1em;
+      color: var(--llama);
+    }
+
+    .stats__label {
+      margin-top: 0.5rem;
+      font-size: 0.8125rem;
+      line-height: 1.4;
+      color: var(--ceniza);
+      max-width: 22ch;
+    }
+
+    .stats__fecha {
+      margin-top: auto;
+      padding-top: 0.6rem;
+      font-family: var(--mono);
+      font-size: 0.5625rem;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--ceniza);
+      opacity: 0.85;
+    }
+
+    @media (min-width: 860px) {
+      .stats {
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+      }
+    }
+
+    .fuente {
+      margin-top: 1.25rem;
+      padding-left: 0.85rem;
+      border-left: 1px solid var(--brasa);
+      max-width: 72ch;
+      font-family: var(--mono);
+      font-size: 0.625rem;
+      line-height: 1.6;
+      letter-spacing: 0.03em;
+      color: var(--ceniza);
+    }
+
+    /* ===== Soluciones ===== */
+    .tabs {
+      margin-top: 2rem;
+    }
+
+    .tabs__lista {
+      display: flex;
+      gap: 0.25rem;
+      padding: 0.25rem;
+      border: var(--borde);
+      border-radius: var(--radio);
+      background: var(--carbon);
+      overflow-x: auto;
+      scrollbar-width: none;
+    }
+
+    .tabs__lista::-webkit-scrollbar {
+      display: none;
+    }
+
+    .tabs__tab {
+      flex: 1;
+      min-height: 44px;
+      padding: 0 0.9rem;
+      border: 0;
+      border-radius: 1px;
+      background: none;
+      color: var(--ceniza);
+      font-family: var(--mono);
+      font-size: 0.625rem;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      cursor: pointer;
+      white-space: nowrap;
+      transition:
+        background var(--t-hover) var(--ease),
+        color var(--t-hover) var(--ease);
+    }
+
+    .tabs__tab:hover {
+      color: var(--hueso);
+    }
+
+    .tabs__tab[aria-selected='true'] {
+      background: var(--hueso);
+      color: var(--obsidiana);
+    }
+
+    .tabs__panel {
+      display: grid;
+      gap: 1.25rem;
+      padding-top: 1.5rem;
+    }
+
+    @media (min-width: 860px) {
+      .tabs__lista {
+        width: fit-content;
+      }
+
+      .tabs__tab {
+        flex: none;
+      }
+
+      .tabs__panel {
+        grid-template-columns: minmax(0, 1.35fr) minmax(0, 0.65fr);
+        grid-template-areas:
+          'texto datos'
+          'cta datos';
+        gap: 1.5rem 2.5rem;
+        align-items: start;
+        padding-top: 2rem;
+      }
+
+      .tabs__texto {
+        grid-area: texto;
+      }
+
+      .tabs__datos {
+        grid-area: datos;
+      }
+
+      .tabs__cta {
+        grid-area: cta;
+        justify-self: start;
+      }
+    }
+
+    .tabs__titulo {
+      font-family: var(--display);
+      font-stretch: 105%;
+      font-weight: 700;
+      font-size: clamp(1.35rem, 3vw, 1.75rem);
+      line-height: 1.1;
+      letter-spacing: -0.015em;
+      max-width: 26ch;
+    }
+
+    .tabs__bajada {
+      margin-top: 0.75rem;
+      max-width: 54ch;
+      color: var(--ceniza);
+      font-size: 0.9375rem;
+      line-height: 1.55;
+    }
+
+    .tabs__nota {
+      margin-top: 0.75rem;
+      padding-left: 0.85rem;
+      border-left: 1px solid var(--linea-fuerte);
+      max-width: 54ch;
+      font-size: 0.8125rem;
+      line-height: 1.5;
+      color: var(--cielo);
+    }
+
+    .tabs__datos {
+      display: grid;
+      align-content: start;
+      border-top: 1px solid var(--linea);
+    }
+
+    .tabs__datos li {
+      display: flex;
+      align-items: baseline;
+      gap: 0.65rem;
+      padding: 0.7rem 0;
+      border-bottom: 1px solid var(--linea);
+      font-size: 0.875rem;
+      line-height: 1.4;
+      color: var(--hueso);
+    }
+
+    .marca__punto {
+      flex: none;
+      width: 6px;
+      height: 6px;
+      background: var(--llama);
+      transform: rotate(45deg);
+    }
+
+    /* ===== Proceso ===== */
+    .pasos {
+      margin-top: 2rem;
+      border-top: 1px solid var(--linea);
+    }
+
+    .pasos li {
+      display: flex;
+      gap: 1.1rem;
+      padding: 1.15rem 0;
+      border-bottom: 1px solid var(--linea);
+    }
+
+    .pasos__n {
+      flex: none;
+      padding-top: 0.3rem;
+      font-size: 0.625rem;
+      color: var(--llama);
+    }
+
+    .pasos__t {
+      font-family: var(--display);
+      font-stretch: 105%;
+      font-weight: 700;
+      font-size: 1.125rem;
+      letter-spacing: -0.01em;
+    }
+
+    .pasos__d {
+      margin-top: 0.25rem;
+      max-width: 60ch;
+      font-size: 0.875rem;
+      line-height: 1.5;
+      color: var(--ceniza);
+    }
+
+    @media (min-width: 900px) {
+      .pasos {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        column-gap: 3rem;
+        border-top: 0;
+      }
+
+      .pasos li {
+        border-top: 1px solid var(--linea);
+        border-bottom: 0;
+        padding: 1.35rem 0;
+      }
+    }
+
+    /* ===== Proyectos ===== */
+    .obras {
+      display: grid;
+      gap: 0.75rem;
+      margin-top: 2rem;
+    }
+
+    @media (min-width: 760px) {
+      .obras {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+      }
+    }
+
+    .obra {
+      display: flex;
+      flex-direction: column;
+      border: var(--borde);
+      border-radius: var(--radio);
+      background: var(--carbon);
+      overflow: hidden;
+    }
+
+    .obra__foto {
+      position: relative;
+      display: grid;
+      place-items: center;
+      aspect-ratio: 4 / 3;
+      border-bottom: var(--borde);
+      background:
+        repeating-linear-gradient(
+          135deg,
+          rgba(243, 238, 228, 0.055) 0 1px,
+          transparent 1px 13px
+        ),
+        var(--carbon-alto);
+    }
+
+    .obra__n {
+      position: absolute;
+      top: 0.65rem;
+      right: 0.75rem;
+      font-size: 0.5625rem;
+      color: var(--ceniza);
+    }
+
+    .obra__pie {
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+      padding: 1rem;
+    }
+
+    .obra__pie .tag {
+      align-self: flex-start;
+    }
+
+    .obra__titulo {
+      font-family: var(--display);
+      font-stretch: 105%;
+      font-weight: 700;
+      font-size: 1.15rem;
+      letter-spacing: -0.01em;
+    }
+
+    .obra__datos {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 0.5rem;
+      margin: 0.25rem 0 0;
+      padding-top: 0.65rem;
+      border-top: 1px solid var(--linea);
+    }
+
+    .obra__datos dt {
+      font-family: var(--mono);
+      font-size: 0.5rem;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--ceniza);
+    }
+
+    .obra__datos dd {
+      margin: 0.2rem 0 0;
+      font-family: var(--mono);
+      font-size: 0.6875rem;
+      color: var(--hueso);
+    }
+
+    /* ===== Diferenciales ===== */
+    .difs {
+      display: grid;
+      gap: 1.5rem;
+      margin-top: 2rem;
+    }
+
+    .difs li {
+      padding-top: 0.9rem;
+      border-top: 1px solid var(--linea);
+    }
+
+    .difs__n {
+      font-size: 0.5625rem;
+      color: var(--llama);
+    }
+
+    .difs__t {
+      margin-top: 0.5rem;
+      font-family: var(--display);
+      font-stretch: 105%;
+      font-weight: 700;
+      font-size: 1.0625rem;
+      letter-spacing: -0.01em;
+    }
+
+    .difs__d {
+      margin-top: 0.35rem;
+      font-size: 0.875rem;
+      line-height: 1.5;
+      color: var(--ceniza);
+    }
+
+    @media (min-width: 720px) {
+      .difs {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 1.75rem 2rem;
+      }
+    }
+
+    @media (min-width: 1080px) {
+      .difs {
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+      }
+    }
+
+    /* ===== Testimonios ===== */
+    .voces {
+      display: grid;
+      gap: 0.75rem;
+      margin-top: 2rem;
+    }
+
+    .voz {
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
+      padding: 1.15rem;
+      border: var(--borde);
+      border-radius: var(--radio);
+      background: var(--carbon);
+    }
+
+    .voz__texto {
+      font-size: 0.8125rem;
+      line-height: 1.55;
+    }
+
+    .voz__autor {
+      margin-top: auto;
+      font-size: 0.875rem;
+      color: var(--hueso);
+    }
+
+    .voz__tipo {
+      font-size: 0.5625rem;
+    }
+
+    @media (min-width: 760px) {
+      .voces {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+      }
+    }
+
+    /* ===== Preguntas ===== */
+    .faq {
+      margin-top: 2rem;
+      border-top: 1px solid var(--linea);
+    }
+
+    .faq__item {
+      border-bottom: 1px solid var(--linea);
+      scroll-margin-top: 88px;
+    }
+
+    .faq__item summary {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1rem;
+      padding: 1.1rem 0;
+      min-height: 56px;
+      cursor: pointer;
+      list-style: none;
+      font-size: 0.9375rem;
+      font-weight: 600;
+      line-height: 1.4;
+      color: var(--hueso);
+    }
+
+    .faq__item summary::-webkit-details-marker {
+      display: none;
+    }
+
+    .faq__signo {
+      position: relative;
+      flex: none;
+      width: 14px;
+      height: 14px;
+    }
+
+    .faq__signo::before,
+    .faq__signo::after {
+      content: '';
+      position: absolute;
+      inset: 50% 0 auto 0;
+      height: 1px;
+      background: var(--llama);
+      transition: transform var(--t-hover) var(--ease);
+    }
+
+    .faq__signo::after {
+      transform: rotate(90deg);
+    }
+
+    .faq__item[open] .faq__signo::after {
+      transform: rotate(0deg);
+    }
+
+    .faq__item p {
+      max-width: 70ch;
+      padding: 0 2rem 1.25rem 0;
+      font-size: 0.875rem;
+      line-height: 1.55;
+      color: var(--ceniza);
+    }
+
+    /* ===== Contacto ===== */
+    .contacto__grid {
+      display: grid;
+      gap: 2rem;
+    }
+
+    @media (min-width: 900px) {
+      .contacto__grid {
+        grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
+        gap: 3rem;
+        align-items: start;
+      }
+    }
+
+    .contacto__bajada {
+      margin-top: 1rem;
+      max-width: 44ch;
+    }
+
+    .contacto__datos {
+      display: grid;
+      gap: 0.75rem;
+      margin-top: 1.75rem;
+      padding-top: 1.25rem;
+      border-top: 1px solid var(--linea);
+    }
+
+    .contacto__datos li {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: baseline;
+      gap: 0.5rem;
+    }
+
+    .contacto__datos .mono {
+      min-width: 5.5rem;
+      font-size: 0.5625rem;
+    }
+
+    .form {
+      display: grid;
+      gap: 1.1rem;
+      padding: 1.25rem;
+    }
+
+    .form__fila {
+      display: grid;
+      gap: 1.1rem;
+    }
+
+    @media (min-width: 560px) {
+      .form__fila {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 1rem;
+      }
+    }
+
+    .form__req {
+      color: var(--llama);
+    }
+
+    .form__error {
+      font-size: 0.8125rem;
+      color: var(--llama);
+    }
+
+    .form__enviar {
+      width: 100%;
+    }
+
+    .form__nota {
+      font-size: 0.75rem;
+      line-height: 1.55;
+      color: var(--ceniza);
+    }
+
+    .form__nota a {
+      color: var(--cielo);
+      text-decoration: underline;
+      text-underline-offset: 2px;
+    }
+
+    .form__correo {
+      justify-self: start;
+      font-size: 0.75rem;
+      color: var(--cielo);
+      text-decoration: underline;
+      text-underline-offset: 3px;
+    }
+
+    .form__listo {
+      display: grid;
+      gap: 0.75rem;
+      padding-top: 1rem;
+      border-top: 1px solid var(--linea);
+    }
+
+    .form__listo-titulo {
+      font-family: var(--mono);
+      font-size: 0.625rem;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--llama);
+    }
+
+    .form__mensaje {
+      margin: 0;
+      padding: 0.85rem;
+      border: var(--borde);
+      border-radius: var(--radio);
+      background: var(--obsidiana);
+      font-family: var(--mono);
+      font-size: 0.75rem;
+      line-height: 1.65;
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+      color: var(--hueso);
+    }
+
+    .form__listo-acciones {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+    }
+
+    .form__copiado {
+      font-size: 0.5625rem;
+      color: var(--llama);
+    }
+
+    .form__nota code {
+      font-family: var(--mono);
+      font-size: 0.6875rem;
+      color: var(--cielo);
+    }
+
+    /* ===== Pie ===== */
+    .pie {
+      padding-block: 2.5rem 1.5rem;
+      border-top: var(--borde);
+    }
+
+    .pie__top {
+      display: grid;
+      gap: 1.75rem;
+    }
+
+    @media (min-width: 760px) {
+      .pie__top {
+        grid-template-columns: 1.4fr repeat(3, minmax(0, 1fr));
+        gap: 2rem;
+      }
+    }
+
+    .pie__frase {
+      margin-top: 0.85rem;
+      font-family: var(--display);
+      font-stretch: 105%;
+      font-size: 1.05rem;
+      color: var(--ceniza);
+    }
+
+    .pie__col {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 0.5rem;
+      font-size: 0.875rem;
+      color: var(--ceniza);
+    }
+
+    .pie__col .mono {
+      margin-bottom: 0.25rem;
+      font-size: 0.5625rem;
+    }
+
+    .pie__col a {
+      transition: color var(--t-hover) var(--ease);
+    }
+
+    .pie__col a:hover {
+      color: var(--hueso);
+    }
+
+    .pie__bajo {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      gap: 0.75rem;
+      margin-top: 2rem;
+      padding-top: 1.25rem;
+      border-top: 1px solid var(--linea);
+    }
+
+    .pie__demo {
+      max-width: 52ch;
+      font-size: 0.75rem;
+      line-height: 1.5;
+      color: var(--ceniza);
+    }
+
+    .pie__meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 1rem;
+      font-size: 0.5625rem;
+    }
+
+    .pie__meta a:hover {
+      color: var(--hueso);
+    }
+
+    /* ===== Barra fija del celular ===== */
+    .barra {
+      position: fixed;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      z-index: 60;
+      display: flex;
+      gap: 0.5rem;
+      padding: 0.6rem var(--gutter) calc(0.6rem + env(safe-area-inset-bottom));
+      background: rgba(10, 15, 13, 0.94);
+      backdrop-filter: blur(12px);
+      border-top: 1px solid var(--linea);
+      transform: translateY(115%);
+      transition: transform 0.4s var(--ease);
+    }
+
+    .barra--visible {
+      transform: none;
+    }
+
+    .barra__cta {
+      flex: 1;
+      min-height: 48px;
+      font-size: 0.875rem;
+    }
+
+    .barra__wa {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 48px;
+      padding: 0 0.95rem;
+      border: 1px solid var(--linea-fuerte);
+      border-radius: var(--radio);
+      font-size: 0.75rem;
+      color: var(--hueso);
+      white-space: nowrap;
+    }
+
+    @media (max-width: 899px) {
+      .pie {
+        padding-bottom: 5.75rem;
+      }
+    }
+
+    @media (min-width: 900px) {
+      .barra {
+        display: none;
+      }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .js .hero__in {
+        transform: none;
+        animation: none;
+      }
+
+      .js .btn__spark {
+        transform: scaleX(1);
+      }
+
+      .barra {
+        transition: none;
+      }
+    }
+  </style>
+</Base>

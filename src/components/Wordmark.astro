@@ -1,0 +1,16 @@
+---
+import Spark from './Spark.astro';
+
+interface Props {
+  conSimbolo?: boolean;
+  gradId?: string;
+  class?: string;
+}
+
+const { conSimbolo = false, gradId = 'wordmark', class: clase = '' } = Astro.props;
+---
+
+<span class={`marca ${clase}`}>
+  {conSimbolo && <Spark class="marca__simbolo" grad id={gradId} />}
+  <span class="marca__nombre">PHENI<span class="marca__x">X</span></span>
+</span>
